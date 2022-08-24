@@ -21,6 +21,7 @@
 
           deap
           numpy
+          scipy
           tqdm
         ];
       };
