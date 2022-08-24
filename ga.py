@@ -8,7 +8,7 @@ from scipy.special import binom
 from tqdm import tqdm
 
 n_talks = 22
-n_talks_per_slot = n_talks / 2
+n_talks_per_slot = n_talks // 2
 n_person = 180
 
 talks = np.arange(n_talks)
