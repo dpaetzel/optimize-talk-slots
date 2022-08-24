@@ -7,12 +7,15 @@ from deap.algorithms import eaMuPlusLambda
 from scipy.special import binom
 from tqdm import tqdm
 
+n_talks = 22
+n_talks_per_slot = n_talks / 2
 n_person = 180
-talks = np.arange(22)
+
+talks = np.arange(n_talks)
 
 PRIOS = []
 for n in range(n_person):
-    prio = list(range(5)) + list(np.repeat(100, 22 - 5))
+    prio = list(range(5)) + list(np.repeat(100, n_talks - 5))
     np.random.shuffle(prio)
     PRIOS.append(prio)
 PRIOS = np.array(PRIOS)
@@ -44,9 +47,10 @@ def to_phenotype(genotype):
 
 def brute_force(prios):
     best = None, np.inf
-    for genotype in tqdm(itertools.permutations(
-            np.concatenate([np.ones(11), np.zeros(11)])),
-                         total=binom(22, 11)):
+    for slot1 in tqdm(itertools.combinations(talks, n_talks_per_slot),
+                      total=binom(n_talks, n_talks_per_slot)):
+        genotype = np.zeros(n_talks)
+        genotype[list(slot1)] = 1
 
         phenotype = to_phenotype_(genotype)
 
@@ -63,7 +67,7 @@ def ga(prios):
     creator.create("Individual", np.ndarray, fitness=creator.FitnessMin)
 
     def random_individual():
-        ind = [1] * 11 + [0] * 11
+        ind = [1] * n_talks_per_slot + [0] * n_talks_per_slot
         random.shuffle(ind)
         return creator.Individual(ind)
 
