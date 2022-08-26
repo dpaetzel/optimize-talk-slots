@@ -38,12 +38,11 @@ def compute_costs(prios, phenotype):
 
 
 def to_phenotype_(genotype):
-    return np.where(np.array(genotype) == 0), np.where(np.array(genotype) == 1)
+    return np.where(np.array(genotype) == 0)[0], np.where(np.array(genotype) == 1)[0]
 
 
 def to_phenotype(genotype):
-    return np.where(genotype == 0), np.where(genotype == 1)
-
+    return np.where(genotype == 0)[0], np.where(genotype == 1)[0]
 
 def brute_force(prios):
     best = None, np.inf
@@ -52,7 +51,7 @@ def brute_force(prios):
         genotype = np.zeros(n_talks)
         genotype[list(slot1)] = 1
 
-        phenotype = to_phenotype_(genotype)
+        phenotype = to_phenotype(genotype)
 
         costs = compute_costs(prios, phenotype)
 
