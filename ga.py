@@ -21,12 +21,17 @@ for n in range(n_person):
     PRIOS.append(prio)
 PRIOS = np.array(PRIOS)
 
-TALKERS = []
-talkers_ = random.sample(list(persons),n_talks)
-TALKERS = dict(zip(talkers_,talks))
-# update prios of talkers
-for talker, talk in TALKERS.items():
-    PRIOS[talker][talk] = 0
+# random init of TALKERS
+speakers_ = random.sample(list(persons), n_talks)
+speakers_ = dict(zip(speakers_, talks))
+TALKERS = speakers_
+# init penalties for all talks apart from the one the speaker is giving
+# for n in range(len(n_person)):
+#     talk_penalty = list(np.repeat(1000, n_talks))
+#     TALKERS.append(talk_penalty)
+for speaker, talk in speakers_.items():
+    PRIOS[speaker][talk] = -500
+
 
 def assigned_priorities(prios, phenotype):
     assigned_prios = []
@@ -40,28 +45,9 @@ def assigned_priorities(prios, phenotype):
     return np.array(assigned_prios)
 
 
-def punish_erroneously_assigned_talkers(talkers, phenotype):
-    cost = [] # cost for talks where talker is not present in talks
-    for talker, talk in talkers.items():
-        c = 0
-        #punish if their first prio is not in the same slot as their talk
-        if talk in phenotype[0][0]:
-            if 0 in phenotype[1][0]:
-                c += 1000
-            #talkers should get a prio that is not in the same slot as their talk --> punish if this isnt the case
-            if 1 in phenotype[0][0] or 2 in phenotype[0][0]: 
-                c += 10
-        else:
-            if 0 in phenotype[0][0]:
-                c += 1000
-            if 1 in phenotype[1][0] or 2 in phenotype[0][0]:
-                c += 10
-        cost.append(c)
-    return np.array(cost)
-
-
 def compute_costs(prios, talkers, phenotype):
-    return np.sum(assigned_priorities(prios, phenotype)) + np.sum(punish_erroneously_assigned_talkers(talkers, phenotype))
+    # + np.sum(punish_erroneously_assigned_talkers(talkers, phenotype))
+    return np.sum(assigned_priorities(prios, phenotype))
 
 
 def to_phenotype_(genotype):
@@ -70,6 +56,7 @@ def to_phenotype_(genotype):
 
 def to_phenotype(genotype):
     return np.where(genotype == 0)[0], np.where(genotype == 1)[0]
+
 
 def brute_force(prios, talkers):
     best = None, np.inf
@@ -157,4 +144,3 @@ print(
 )
 print(assigned_priorities(PRIOS, elitist))
 print(f"Costs GA: {logbook[-1]['min']} vs BruteForce: {costs}")
-
