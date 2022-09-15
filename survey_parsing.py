@@ -1,16 +1,19 @@
 import pandas as pd
 import math
+import numpy as np
 
 
 def preprocess_excel(path):
     """
     This function reads the excel list and returns the needed data from it
+    Excel List resulted from a MS Forms survey where participants could select 5 priorities.
+    Also they were able to select and if they are a workshop owner and consequently need to be placed in this workshop. 
     :param path: Path to the excel list
     :return: Dict(
         "id_to_name_dict": Dict(Int -> String),
         "name_to_id_dict": Dict(String -> Int),
         "workshop_list": List(String),
-        "speaker_dict": Dict(int -> String),
+        "speaker_dict": Dict(int -> int),
         "prio_matrix": Matrix( number_of_participants x number_of_workshops)
         )
     """
@@ -33,10 +36,10 @@ def preprocess_excel(path):
     # This removes the nan element from the list
     workshop_data_list = list(filter(lambda x: x == x, workshop_data_raw))
 
-    # manually add workshop for external speaker:
+    # manually add a workshop of an external participant who does not participate in other workshops:
     workshop_data_list.append("W2 Building the City of the Future")
 
-    speakers = {}
+    speaker_workshop_dict = {}
     no_workshops = len(workshop_data_list)
     priorities_of_humans = []
     for _, entry in data.iterrows():
@@ -46,8 +49,9 @@ def preprocess_excel(path):
             try:
                 math.isnan(speaks_at)
             except:
-                speakers[name_to_id[entry[4]]] = entry[5]
-        # Create prio list for the participants
+                speaker_workshop_dict[name_to_id[entry[4]]
+                                      ] = workshop_data_list.index(entry[5])
+        # Create prio list for the humans
         prios = [100 for _ in range(no_workshops)]
         for i in range(6, 11):
             # Catch error if user has not filled out all prios
@@ -63,10 +67,11 @@ def preprocess_excel(path):
         "id_to_name_dict": id_to_name,
         "name_to_id_dict": name_to_id,
         "workshop_list": workshop_data_list,
-        "speaker_dict": speakers,
-        "prio_matrix": priorities_of_humans
+        "speaker_workshop_dict": speaker_workshop_dict,
+        "prio_matrix": np.array(priorities_of_humans)
     }
 
 
 if __name__ == '__main__':
     res = preprocess_excel('Workshop Preference Voting Retreat 2022.xlsx')
+    print()

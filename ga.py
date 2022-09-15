@@ -1,36 +1,54 @@
+import codecs
+from collections import defaultdict
+import collections
 import itertools
+from pickle import FALSE
+import pprint
 import random
+import sys
 
 import numpy as np
 from deap import base, creator, tools
 from deap.algorithms import eaMuPlusLambda
 from scipy.special import binom
 from tqdm import tqdm
+import survey_parsing
 
-n_talks = 22
-n_talks_per_slot = n_talks // 2
-n_person = 180
+SYNTHETIC_DATA = False
 
-talks = np.arange(n_talks)
-persons = np.arange(n_person)
+if SYNTHETIC_DATA:
+    n_talks = 22
+    n_talks_per_slot = n_talks // 2
+    n_person = 180
 
-PRIOS = []
-for n in range(n_person):
-    prio = list(range(5)) + list(np.repeat(100, n_talks - 5))
-    np.random.shuffle(prio)
-    PRIOS.append(prio)
-PRIOS = np.array(PRIOS)
+    talks = np.arange(n_talks)
+    persons = np.arange(n_person)
 
-# random init of TALKERS
-speakers_ = random.sample(list(persons), n_talks)
-speakers_ = dict(zip(speakers_, talks))
-TALKERS = speakers_
-# init penalties for all talks apart from the one the speaker is giving
-# for n in range(len(n_person)):
-#     talk_penalty = list(np.repeat(1000, n_talks))
-#     TALKERS.append(talk_penalty)
-for speaker, talk in speakers_.items():
+    PRIOS = []
+    for n in range(n_person):
+        prio = list(range(5)) + list(np.repeat(100, n_talks - 5))
+        np.random.shuffle(prio)
+        PRIOS.append(prio)
+    PRIOS = np.array(PRIOS)
+
+    # random init of TALKERS
+    speakers_ = random.sample(list(persons), n_talks)
+    speakers_ = dict(zip(speakers_, talks))
+    TALKERS = speakers_
+else:
+    parsed_survey = survey_parsing.preprocess_excel(
+        'Workshop Preference Voting Retreat 2022.xlsx')
+    PRIOS = parsed_survey['prio_matrix']
+    TALKERS = parsed_survey['speaker_workshop_dict']
+    workshop_names = parsed_survey['workshop_list']
+    participant_names = parsed_survey['id_to_name_dict']
+    talks = set(TALKERS.values())
+    n_talks = len(talks)
+
+for speaker, talk in TALKERS.items():
     PRIOS[speaker][talk] = -500
+n_talks_per_slot = n_talks // 2
+workshops = set(TALKERS.values())
 
 
 def assigned_priorities(prios, phenotype):
@@ -45,8 +63,24 @@ def assigned_priorities(prios, phenotype):
     return np.array(assigned_prios)
 
 
+def workshop_attendance(assigned_prios, prios):
+    workshops = defaultdict(list)
+    for person, prios_for_person in enumerate(assigned_prios):
+        for prio in prios_for_person:
+            workshops[np.where(prios[person] == prio)[0][0]].append(person)
+    return workshops  # WS->Attendees
+
+
+def prettify_workshop_assignments(workshop_assignments, workshop_names, participant_names):
+    workshops_pretty = dict()
+    for workshop, participants in workshop_assignments.items():
+        participants_pretty = [participant_names[participant]
+                               for participant in participants]
+        workshops_pretty[workshop_names[workshop]] = participants_pretty
+    return workshops_pretty
+
+
 def compute_costs(prios, talkers, phenotype):
-    # + np.sum(punish_erroneously_assigned_talkers(talkers, phenotype))
     return np.sum(assigned_priorities(prios, phenotype))
 
 
@@ -60,6 +94,7 @@ def to_phenotype(genotype):
 
 def brute_force(prios, talkers):
     best = None, np.inf
+    bests = []
     for slot1 in tqdm(itertools.combinations(talks, n_talks_per_slot),
                       total=binom(n_talks, n_talks_per_slot)):
         genotype = np.zeros(n_talks)
@@ -71,8 +106,35 @@ def brute_force(prios, talkers):
 
         if costs < best[1]:
             best = phenotype, costs
+            bests = [best]
+        if costs == best[1]:
+            bests.append((phenotype, costs))
 
-    return best
+    return best, bests
+
+
+def print_results(result, costs, prios, workshop_names, participant_names):
+    pp = pprint.PrettyPrinter(width=140)
+    print(
+        f"\n------------------------------------------------------------------------------------------------------------------------------------------\n"
+    )
+    print(f'Workshop Assignment with Costs: {costs}')
+    for i in range(2):
+        print(f'\nWorkshops in Slot {i}\n')
+        pp.pprint([workshop_names[ws] for ws in result[i]])
+
+    print(f'\nParticipants per Workshop:\n')
+    assigned_prios = assigned_priorities(prios, result)
+    # ensure that every speaker is assigned to his workshop
+    assert (assigned_prios == -500).sum(), len(TALKERS.items())
+    if not SYNTHETIC_DATA:
+        w_assignments = prettify_workshop_assignments(
+            workshop_attendance(assigned_prios, prios), workshop_names, participant_names)
+        pp.pprint(w_assignments)
+        w_num = {workshop: len(participants)
+                 for workshop, participants in w_assignments.items()}
+        print(f'\nNumber of Participants per Workshop:\n')
+        pp.pprint(w_num)
 
 
 def ga(prios, talkers):
@@ -132,15 +194,23 @@ def ga(prios, talkers):
                           verbose=True), hof
 
 
-costs = 0
-individual, costs = brute_force(PRIOS, TALKERS)
-print(f"Best BruteFroce result: {individual} with costs: {costs}")
+costs_bf = 0
+best, bests = brute_force(PRIOS, TALKERS)
+print('-----------------BRUTE FORCE-------------------')
+stdout = sys.stdout
+with codecs.open("results_bf.txt", "w", "utf-8-sig") as sys.stdout:
+    for results_bf, costs_bf in bests:
+        print_results(results_bf, costs_bf, PRIOS,
+                      workshop_names, participant_names)
+sys.stdout = stdout
 
 (pop, logbook), hof = ga(PRIOS, TALKERS)
 elitist = to_phenotype(hof[0])
 
-print(
-    f"Best individual: Slot 0 are talks {elitist[0]}, slot 1 are talks {elitist[1]}"
-)
-print(assigned_priorities(PRIOS, elitist))
-print(f"Costs GA: {logbook[-1]['min']} vs BruteForce: {costs}")
+print('-----------------GA-------------------')
+costs_ga = logbook[-1]['min']
+with codecs.open("results_ga.txt", "w", "utf-8-sig") as sys.stdout:
+    print_results(elitist, costs_ga, PRIOS, workshop_names, participant_names)
+sys.stdout = stdout
+
+print(f"Costs GA: {logbook[-1]['min']} vs BruteForce: {costs_bf}")
